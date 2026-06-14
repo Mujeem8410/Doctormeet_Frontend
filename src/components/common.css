@@ -1,0 +1,32 @@
+.task-card {
+  background-color: #fff;
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 10px;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  cursor: pointer;
+  border-left: 5px solid rgb(0, 123, 255);
+}
+
+.task-card:hover {
+  transform: scale(1.02);
+  box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15);
+}
+
+.task-card:active {
+  cursor: pointer;
+}
+.rejected{
+  background-color: rgb(254, 226, 226);
+
+}
+.completed{
+ background-color: rgb(219, 234, 254);
+
+
+}
+.accepted{
+  background-color: rgb(220, 252, 231);
+
+}

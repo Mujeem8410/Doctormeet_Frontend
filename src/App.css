@@ -1,0 +1,11 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body{
+  font-family: "Lato", sans-serif;
+  font-weight: 500;
+  font-style: normal;
+  background-image: url(https://images.pexels.com/photos/40568/medical-appointment-doctor-healthcare-40568.jpeg);
+  background-size: cover;
+}
