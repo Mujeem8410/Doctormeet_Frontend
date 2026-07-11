@@ -60,7 +60,13 @@ function Login() {
       else if (res.data.user.role === "doctor") navigate("/doctor/dashboard");
       else if (res.data.user.role === "admin") navigate("/admin/dashboard");
     } catch (err) {
+      console.error("❌ Login Error:", err);
+      console.error("Response Data:", err.response?.data);
+      console.error("User Message:", err.userMessage);
+      
       const msg = err.userMessage || err.response?.data?.message || "Login failed";
+      console.log("📢 Showing Toast:", msg);
+      
       toast.error(msg);
     } finally {
       setIsLoggingIn(false);
