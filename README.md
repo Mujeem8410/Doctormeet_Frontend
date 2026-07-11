@@ -182,4 +182,3 @@ Make sure the backend is running and the runtime configuration in `src/utils/run
 This frontend provides a complete web interface for a doctor appointment system. It is built with React and Vite, supports multiple user roles, and is prepared for real-time notifications and video consultation workflows.
 
 The README above is intentionally detailed to help new developers quickly understand the project structure, how to run it, and what functionality is included.
-a
