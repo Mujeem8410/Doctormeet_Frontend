@@ -1,11 +1,21 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Navbar from "../AuPublic/Navbar";
 import { toast } from "react-toastify";
 import API from "../utils/api";
 import DoctorAvailabilityForm from "./DoctorAvailabilityForm";
 import { FiEye, FiEyeOff } from "react-icons/fi";
+import { Link, useNavigate } from "react-router-dom";
+import {
+  isValidPassword,
+  PASSWORD_POLICY_MESSAGE,
+  sanitizeOtp,
+} from "../utils/authValidation";
+
+const OTP_RESEND_SECONDS = 180;
 
 function Register() {
+  const navigate = useNavigate();
+  
   const [formData, setFormData] = useState({
     name: "",
     email: "",
@@ -27,10 +37,32 @@ function Register() {
   const [otp, setOtp] = useState("");
   const [availability, setAvailability] = useState([]);
   const [showPassword, setShowPassword] = useState(false);
+  const [resendCountdown, setResendCountdown] = useState(0);
+  const [isRegistering, setIsRegistering] = useState(false);
+  const [isVerifying, setIsVerifying] = useState(false);
+  const [isResending, setIsResending] = useState(false);
 
   const inputClass =
     "w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-[15px] text-slate-700 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100";
   const sectionClass = "rounded-2xl border border-slate-200 bg-slate-50/80 p-3.5";
+
+  useEffect(() => {
+    if (resendCountdown <= 0) {
+      return undefined;
+    }
+
+    const timer = window.setInterval(() => {
+      setResendCountdown((prev) => (prev > 0 ? prev - 1 : 0));
+    }, 1000);
+
+    return () => window.clearInterval(timer);
+  }, [resendCountdown]);
+
+  const formatCountdown = (seconds) => {
+    const minutes = String(Math.floor(seconds / 60)).padStart(2, "0");
+    const remainingSeconds = String(seconds % 60).padStart(2, "0");
+    return `${minutes}:${remainingSeconds}`;
+  };
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -60,7 +92,13 @@ function Register() {
       }
     }
 
+    if (!isValidPassword(formData.password)) {
+      toast.error(PASSWORD_POLICY_MESSAGE);
+      return;
+    }
+
     try {
+      setIsRegistering(true);
       const registrationData = {
         ...formData,
         ...(formData.role === "doctor" && {
@@ -73,15 +111,40 @@ function Register() {
       if (res.status === 200) {
         toast.success("OTP sent to your email");
         setStep(2);
+        setOtp("");
+        setResendCountdown(res.data.resendAfter || OTP_RESEND_SECONDS);
       }
     } catch (err) {
-      toast.error(err.response?.data?.message || "Registration failed");
+      // Check if it's a duplicate email error
+      const errorMessage = err.userMessage || err.response?.data?.message || "Registration failed";
+      toast.error(errorMessage);
+      
+      // Only move to step 2 if OTP was already sent (retry needed)
+      // Don't move to step 2 for email already registered errors
+      if (err.response?.data?.resendAfter && !errorMessage.includes("already registered")) {
+        setStep(2);
+        setResendCountdown(err.response.data.resendAfter);
+      }
+    } finally {
+      setIsRegistering(false);
     }
   };
 
   const handleVerifyOtp = async (e) => {
     e.preventDefault();
+
+    if (!/^\d{6}$/.test(otp)) {
+      toast.error("OTP must be exactly 6 digits.");
+      return;
+    }
+
+    if (!isValidPassword(formData.password)) {
+      toast.error(PASSWORD_POLICY_MESSAGE);
+      return;
+    }
+
     try {
+      setIsVerifying(true);
       const verificationData = {
         email: formData.email,
         otp,
@@ -106,13 +169,50 @@ function Register() {
       const res = await API.post("/verifyOTP", verificationData);
 
       if (res.status === 201) {
-        toast.success("Account created successfully");
+        // Store token and user data
+        localStorage.setItem("token", res.data.token);
+        localStorage.setItem("user", JSON.stringify(res.data.user));
+        localStorage.setItem("role", res.data.user.role);
+        localStorage.setItem("loginTime", Date.now());
+        
+        toast.success("Account created successfully! Redirecting to dashboard...");
+        
+        // Redirect to appropriate dashboard
         setTimeout(() => {
-          window.location.href = "/login";
+          if (res.data.user.role === "patient") {
+            navigate("/patient/dashboard");
+          } else if (res.data.user.role === "doctor") {
+            navigate("/doctor/dashboard");
+          } else if (res.data.user.role === "admin") {
+            navigate("/admin/dashboard");
+          }
         }, 1000);
       }
     } catch (err) {
-      toast.error(err.response?.data?.message || "OTP verification failed");
+      toast.error(err.userMessage || err.response?.data?.message || "OTP verification failed");
+    } finally {
+      setIsVerifying(false);
+    }
+  
+  };
+
+  const handleResendOtp = async () => {
+    try {
+      setIsResending(true);
+      const res = await API.post("/resend-register-otp", {
+        email: formData.email,
+        name: formData.name,
+      });
+      toast.success(res.data.message || "OTP resent to your email");
+      setResendCountdown(res.data.resendAfter || OTP_RESEND_SECONDS);
+    } catch (err) {
+      const resendAfter = err.response?.data?.resendAfter;
+      if (resendAfter) {
+        setResendCountdown(resendAfter);
+      }
+      toast.error(err.userMessage || err.response?.data?.message || "Failed to resend OTP");
+    } finally {
+      setIsResending(false);
     }
   };
 
@@ -252,6 +352,7 @@ function Register() {
                               value={formData.password}
                               onChange={handleChange}
                               className={`${inputClass} pr-12`}
+                              minLength={8}
                               required
                             />
                             <button
@@ -269,6 +370,10 @@ function Register() {
                               )}
                             </button>
                           </div>
+                          <p className="mt-2 text-xs text-slate-500">
+                            Use 8+ characters with uppercase, lowercase, number,
+                            and special character.
+                          </p>
                         </div>
                       </div>
                     </div>
@@ -473,10 +578,21 @@ function Register() {
 
                     <button
                       type="submit"
+                      disabled={isRegistering}
                       className="w-full rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-blue-200 transition duration-200 hover:bg-blue-700"
                     >
-                      Continue Registration
+                      {isRegistering ? "Sending OTP..." : "Continue Registration"}
                     </button>
+
+                    <p className="text-center text-sm text-slate-500">
+                      You have account?{" "}
+                      <Link
+                        to="/login"
+                        className="font-semibold text-blue-600 hover:text-blue-700 hover:underline"
+                      >
+                        Please login
+                      </Link>
+                    </p>
                   </form>
                 )}
 
@@ -500,18 +616,40 @@ function Register() {
                         name="otp"
                         placeholder="Enter OTP"
                         value={otp}
-                        onChange={(e) => setOtp(e.target.value)}
+                        onChange={(e) => setOtp(sanitizeOtp(e.target.value))}
                         className={`${inputClass} text-center text-lg tracking-[0.45em]`}
                         maxLength={6}
+                        inputMode="numeric"
+                        pattern="[0-9]{6}"
+                        autoComplete="one-time-code"
                         required
                       />
+
+                      <div className="mt-3 flex items-center justify-between gap-3 text-sm">
+                        <span className="text-slate-500">
+                          OTP expires in 3 minutes.
+                        </span>
+                        <button
+                          type="button"
+                          onClick={handleResendOtp}
+                          disabled={resendCountdown > 0 || isResending}
+                          className="font-semibold text-blue-600 transition hover:text-blue-700 disabled:cursor-not-allowed disabled:text-slate-400"
+                        >
+                          {isResending
+                            ? "Resending..."
+                            : resendCountdown > 0
+                            ? `Resend in ${formatCountdown(resendCountdown)}`
+                            : "Resend OTP"}
+                        </button>
+                      </div>
                     </div>
 
                     <button
                       type="submit"
+                      disabled={isVerifying}
                       className="w-full rounded-xl bg-green-600 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-green-200 transition duration-200 hover:bg-green-700"
                     >
-                      Verify OTP
+                      {isVerifying ? "Verifying OTP..." : "Verify OTP"}
                     </button>
                   </form>
                 )}

@@ -32,6 +32,7 @@ window.onload = () => {
 function Login() {
   const [formData, setFormData] = useState({ email: "", password: "" });
   const [showPassword, setShowPassword] = useState(false);
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
   const navigate = useNavigate();
 
   const inputClass =
@@ -45,6 +46,7 @@ function Login() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
+      setIsLoggingIn(true);
       const res = await API.post("/login", formData);
 
       localStorage.setItem("token", res.data.token);
@@ -58,8 +60,10 @@ function Login() {
       else if (res.data.user.role === "doctor") navigate("/doctor/dashboard");
       else if (res.data.user.role === "admin") navigate("/admin/dashboard");
     } catch (err) {
-      const msg = err.response?.data?.message || "Login failed ";
+      const msg = err.userMessage || err.response?.data?.message || "Login failed";
       toast.error(msg);
+    } finally {
+      setIsLoggingIn(false);
     }
   };
 
@@ -174,9 +178,10 @@ function Login() {
 
                   <button
                     type="submit"
+                    disabled={isLoggingIn}
                     className="w-full rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-blue-200 transition duration-200 hover:bg-blue-700"
                   >
-                    Login
+                    {isLoggingIn ? "Signing In..." : "Login"}
                   </button>
 
                   <p className="text-center text-sm text-slate-500">

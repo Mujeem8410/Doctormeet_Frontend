@@ -35,6 +35,7 @@ const PatientDashboard = () => {
   const [showAIRecommendation, setShowAIRecommendation] = useState(false);
   const [showChatbot, setShowChatbot] = useState(false);
   const [chatMessages, setChatMessages] = useState([]);
+  const [chatHistoryLoaded, setChatHistoryLoaded] = useState(false);
   const [userMessage, setUserMessage] = useState("");
   const [appointmentType, setAppointmentType] = useState("clinic");
 
@@ -47,6 +48,21 @@ const PatientDashboard = () => {
     "text-xs font-semibold uppercase tracking-[0.2em] text-slate-500";
   const inputClass =
     "w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-slate-700 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100";
+
+  const formatChatTimestamp = (value) => {
+    if (!value) {
+      return "";
+    }
+
+    try {
+      return new Date(value).toLocaleTimeString([], {
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+    } catch {
+      return value;
+    }
+  };
 
   const handleVideoCallJoin = async (appointment) => {
     try {
@@ -82,21 +98,37 @@ const PatientDashboard = () => {
     setShowAIRecommendation(false);
   };
 
-  const handleSendMessage = async () => {
-    if (!userMessage.trim()) return;
+  const fetchChatHistory = async () => {
+    try {
+      const res = await API.get("/chat/history");
+      setChatMessages(res.data.history || []);
+      setChatHistoryLoaded(true);
+    } catch (err) {
+      console.error("Chat history load error:", err);
+      toast.error(err.response?.data?.message || "Failed to load chat history");
+    }
+  };
 
-    const newMessage = { text: userMessage, sender: "user" };
+  const handleSendMessage = async () => {
+    const currentMessage = userMessage.trim();
+    if (!currentMessage) return;
+
+    const newMessage = {
+      text: currentMessage,
+      sender: "user",
+      timestamp: new Date().toISOString(),
+    };
     setChatMessages((prev) => [...prev, newMessage]);
     setUserMessage("");
 
     try {
       setLoading(true);
-      const res = await API.post("/chat/ai-chat", { message: userMessage });
+      const res = await API.post("/chat/ai-chat", { message: currentMessage });
 
       const aiResponse = {
         text: res.data.response,
         sender: "ai",
-        timestamp: new Date().toLocaleTimeString(),
+        timestamp: new Date().toISOString(),
       };
       setChatMessages((prev) => [...prev, aiResponse]);
     } catch (err) {
@@ -104,7 +136,7 @@ const PatientDashboard = () => {
       const errorMessage = {
         text: "Sorry, I'm having trouble responding. Please try again.",
         sender: "ai",
-        timestamp: new Date().toLocaleTimeString(),
+        timestamp: new Date().toISOString(),
       };
       setChatMessages((prev) => [...prev, errorMessage]);
       toast.error("Failed to get AI response");
@@ -461,6 +493,12 @@ const PatientDashboard = () => {
     };
     loadInitialData();
   }, []);
+
+  useEffect(() => {
+    if (showChatbot && !chatHistoryLoaded) {
+      fetchChatHistory();
+    }
+  }, [showChatbot, chatHistoryLoaded]);
 
   useEffect(() => {
     if (doctors.length > 0) {
@@ -1179,7 +1217,7 @@ const PatientDashboard = () => {
                         <p>{msg.text}</p>
                         {msg.timestamp && (
                           <p className="mt-1 text-xs opacity-70 text-right">
-                            {msg.timestamp}
+                            {formatChatTimestamp(msg.timestamp)}
                           </p>
                         )}
                       </div>
