@@ -20,37 +20,51 @@ API.interceptors.request.use((config) => {
   return config;
 });
 
-let isLogoutHandled = false; // ✅ flag to prevent multiple toasts
+let isLogoutHandled = false;
 
 API.interceptors.response.use(
   (res) => res,
   (err) => {
     const message = err.response?.data?.message;
+    const status = err.response?.status;
 
     if (err.code === "ECONNABORTED") {
-      err.userMessage =
-        "Server is taking too long to respond. Please try again in a moment.";
+      err.userMessage = "Server is taking too long to respond. Please try again in a moment.";
       return Promise.reject(err);
     }
 
     if (!err.response) {
-      err.userMessage =
-        "Unable to reach the server. Please check your internet or try again shortly.";
+      // Network error or timeout
+      console.error("Network Error:", err.message);
+      err.userMessage = err.message.includes("timeout")
+        ? "Request timeout. Please check your connection."
+        : "Unable to reach the server. Please check your internet or try again shortly.";
       return Promise.reject(err);
     }
 
+    // Handle expired token
     if (
       !isLogoutHandled &&
       (message === "Token expired" || message === "Invalid or expired token")
     ) {
-      isLogoutHandled = true; // ✅ prevent further handling
+      isLogoutHandled = true;
       toast.error("Session expired. Please login again.");
       localStorage.clear();
 
       setTimeout(() => {
         window.location.href = "/";
-        isLogoutHandled = false; // reset flag on redirect
+        isLogoutHandled = false;
       }, 1500);
+      return Promise.reject(err);
+    }
+
+    // Set user-friendly message if available
+    if (message) {
+      err.userMessage = message;
+    } else if (status === 404) {
+      err.userMessage = "Resource not found";
+    } else if (status === 500) {
+      err.userMessage = "Server error. Please try again later.";
     }
 
     return Promise.reject(err);

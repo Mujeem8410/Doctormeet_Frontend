@@ -31,10 +31,34 @@ function RouteFallback() {
 
 function App() {
   useEffect(() => {
-    const socket = io(SOCKET_URL);
+    const socket = io(SOCKET_URL, {
+      reconnection: true,
+      reconnectionDelay: 1000,
+      reconnectionDelayMax: 5000,
+      reconnectionAttempts: 5,
+      transports: ["websocket", "polling"],
+      withCredentials: true,
+    });
 
-    socket.on('notification', (data) => {
-      toast[data.type || 'info'](data.message);
+    // Connection event listeners
+    socket.on("connect", () => {
+      console.log("✅ Socket connected:", socket.id);
+    });
+
+    socket.on("disconnect", (reason) => {
+      console.log("❌ Socket disconnected:", reason);
+    });
+
+    socket.on("connect_error", (error) => {
+      console.error("Socket connection error:", error);
+    });
+
+    // Listen for notifications
+    socket.on("notification", (data) => {
+      console.log("📢 Notification received:", data);
+      if (data.message && data.type) {
+        toast[data.type || "info"](data.message);
+      }
     });
 
     return () => {
