@@ -3,9 +3,14 @@
 @tailwind utilities;
 
 body{
-  font-family: "Lato", sans-serif;
+  font-family: var(--font-body);
   font-weight: 500;
   font-style: normal;
-  background-image: url(https://images.pexels.com/photos/40568/medical-appointment-doctor-healthcare-40568.jpeg);
+  background-image:
+    linear-gradient(135deg, rgba(8, 47, 73, 0.78), rgba(14, 116, 144, 0.58)),
+    url(https://images.pexels.com/photos/40568/medical-appointment-doctor-healthcare-40568.jpeg);
+  background-position: center;
+  background-repeat: no-repeat;
   background-size: cover;
+  background-attachment: fixed;
 }

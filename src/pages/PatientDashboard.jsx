@@ -178,6 +178,20 @@ const PatientDashboard = () => {
     }
   };
 
+  const cancelUnpaidAppointment = async (appointmentId) => {
+    if (!appointmentId) return;
+
+    try {
+      await API.delete(`/patient/appointments/cancel/${appointmentId}`);
+      fetchHistory();
+      if (selectedDoctor?._id) {
+        fetchAvailableSlots(selectedDoctor._id);
+      }
+    } catch (err) {
+      console.error("Unpaid appointment cleanup error:", err);
+    }
+  };
+
   const handleBookAppointment = async (slot) => {
     try {
       setLoading(true);
@@ -196,23 +210,30 @@ const PatientDashboard = () => {
       };
 
       const res = await API.post("/patient/appointments", appointmentData);
+      const paymentSuccessful = await handleAdvancePayment(
+        res.data.appointment._id
+      );
+
+      if (!paymentSuccessful) {
+        return;
+      }
 
       if (appointmentType === "video") {
         try {
-          const videoRes = await API.post("/video/create-session", {
+          await API.post("/video/create-session", {
             appointmentId: res.data.appointment._id,
           });
-          res.data.appointment.roomId = videoRes.data.roomId;
-          res.data.appointment.meetingLink = `/video-call/${videoRes.data.roomId}`;
         } catch (videoError) {
           console.error("Video session creation failed:", videoError);
           toast.warning(
-            "Appointment booked but video setup failed. Contact support."
+            "Payment completed, but video setup is delayed. Please refresh shortly."
           );
         }
       }
 
-      await handleAdvancePayment(res.data.appointment._id);
+      setShowModal(false);
+      fetchHistory();
+      fetchAvailableSlots(selectedDoctor._id);
     } catch (err) {
       toast.error(err.response?.data?.message || "Failed to book appointment");
     } finally {
@@ -224,7 +245,8 @@ const PatientDashboard = () => {
     const isLoaded = await loadRazorpayScript();
     if (!isLoaded) {
       alert("Razorpay SDK failed to load. Are you online?");
-      return;
+      await cancelUnpaidAppointment(appointmentId);
+      return false;
     }
 
     try {
@@ -249,46 +271,56 @@ const PatientDashboard = () => {
           appointmentType === "video" ? "Video" : "Clinic"
         } Appointment`,
         order_id: order.id,
-        handler: async (response) => {
-          try {
-            await API.post("/payment/verify-payment", {
-              ...response,
-              appointmentId,
-              paymentType: "advance",
-            });
-
-            toast.success(
-              `30% Advance payment successful! ${
-                appointmentType === "video"
-                  ? "Video call link will be available after doctor confirmation."
-                  : "Waiting for doctor confirmation."
-              }`
-            );
-            setShowModal(false);
-            fetchHistory();
-          } catch (error) {
-            console.error("Advance payment verification error:", error);
-            toast.error("Advance payment verification failed");
-          }
-        },
         prefill: {
           name: user.name,
           email: user.email,
           contact: user.mobile || "+919999999999",
         },
         theme: { color: "#2563eb" },
-        modal: {
-          ondismiss: function () {
-            toast.info("Advance payment cancelled");
-          },
-        },
       };
 
-      const rzp = new window.Razorpay(options);
-      rzp.open();
+      return await new Promise((resolve) => {
+        const rzp = new window.Razorpay({
+          ...options,
+          handler: async (response) => {
+            try {
+              await API.post("/payment/verify-payment", {
+                ...response,
+                appointmentId,
+                paymentType: "advance",
+              });
+
+              toast.success(
+                `30% Advance payment successful! ${
+                  appointmentType === "video"
+                    ? "Video call link will be available after doctor confirmation."
+                    : "Waiting for doctor confirmation."
+                }`
+              );
+              resolve(true);
+            } catch (error) {
+              console.error("Advance payment verification error:", error);
+              toast.error("Advance payment verification failed");
+              await cancelUnpaidAppointment(appointmentId);
+              resolve(false);
+            }
+          },
+          modal: {
+            ondismiss: async function () {
+              toast.info("Advance payment cancelled");
+              await cancelUnpaidAppointment(appointmentId);
+              resolve(false);
+            },
+          },
+        });
+
+        rzp.open();
+      });
     } catch (err) {
       console.error(err);
       toast.error("Advance payment initialization failed");
+      await cancelUnpaidAppointment(appointmentId);
+      return false;
     }
   };
 

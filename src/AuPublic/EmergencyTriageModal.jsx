@@ -18,6 +18,7 @@ const EmergencyTriageModal = () => {
   const sendEmergencyAlert = async (lat, lon) => {
     setIsFetching(true);
     const type = "UrgentHelpNeeded";
+    let helplinePrompt = `Please call the DocMeet Helpline at ${PLATFORM_HELPLINE} to speak to an assistant right now.`;
 
     try {
       console.log("📢 Sending emergency alert...", { lat, lon });
@@ -28,11 +29,20 @@ const EmergencyTriageModal = () => {
       });
 
       console.log("✅ Emergency alert sent:", res.data);
-      toast.success("Help alert sent. Our team received your request.", {
-        autoClose: 5000,
-      });
+      if (res.data?.smsSent) {
+        helplinePrompt = `Your digital alert was sent. Please call the DocMeet Helpline at ${PLATFORM_HELPLINE} if you need immediate human assistance.`;
+        toast.success("Help alert sent. Our team received your request.", {
+          autoClose: 5000,
+        });
+      } else {
+        helplinePrompt = `Your emergency request was saved, but SMS dispatch failed. Please call the DocMeet Helpline at ${PLATFORM_HELPLINE} now.`;
+        toast.warning("Emergency request saved, but SMS dispatch failed.", {
+          autoClose: 8000,
+        });
+      }
     } catch (error) {
       console.error("❌ Emergency Alert Error:", error.response?.data || error.message);
+      helplinePrompt = `Digital alert failed. Please call the DocMeet Helpline at ${PLATFORM_HELPLINE} now.`;
       const errorMsg = error.response?.data?.message || "Failed to send alert. Please call manually.";
       toast.error(errorMsg, {
         autoClose: 8000,
@@ -42,11 +52,7 @@ const EmergencyTriageModal = () => {
       setIsFetching(false);
       closeModal();
 
-      if (
-        window.confirm(
-          `Your digital alert is sent. Now, please call the DocMeet Helpline at ${PLATFORM_HELPLINE} to speak to an assistant.`
-        )
-      ) {
+      if (window.confirm(helplinePrompt)) {
         window.location.href = `tel:${PLATFORM_HELPLINE}`;
       }
     }

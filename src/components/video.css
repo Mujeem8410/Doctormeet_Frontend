@@ -2,7 +2,7 @@
   min-height: 100vh;
   background: linear-gradient(135deg, #1e3a8a 0%, #1e40af 100%);
   color: white;
-  font-family: 'Arial', sans-serif;
+  font-family: var(--font-body);
 }
 
 .video-header {
