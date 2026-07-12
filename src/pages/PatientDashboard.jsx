@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { jwtDecode } from "jwt-decode";
+import { io } from "socket.io-client";
 import {
   FiCalendar,
   FiClock,
@@ -17,6 +18,7 @@ import { toast } from "react-toastify";
 import Avatar from "../components/Avatar";
 import AIRecommendation from "../components/AIRecommendation";
 import Footer from "../components/Footer";
+import { SOCKET_URL } from "../utils/runtimeConfig";
 
 const PatientDashboard = () => {
   const [specialization, setSpecialization] = useState("");
@@ -492,6 +494,52 @@ const PatientDashboard = () => {
       await fetchHistory();
     };
     loadInitialData();
+
+    // Setup socket for real-time updates
+    const socket = io(SOCKET_URL, {
+      reconnection: true,
+      reconnectionDelay: 1000,
+      reconnectionAttempts: 5,
+      transports: ["websocket", "polling"],
+      withCredentials: true,
+    });
+
+    // Listen for appointment updates
+    socket.on("appointment-update", () => {
+      console.log("📢 Appointment update received - refreshing...");
+      fetchHistory();
+    });
+
+    socket.on("appointment-confirmed", () => {
+      console.log("✅ Appointment confirmed - refreshing...");
+      fetchHistory();
+      toast.success("Your appointment has been confirmed!");
+    });
+
+    socket.on("appointment-rejected", () => {
+      console.log("❌ Appointment rejected - refreshing...");
+      fetchHistory();
+      toast.error("Your appointment has been rejected");
+    });
+
+    socket.on("notification", (data) => {
+      console.log("📢 Notification:", data);
+      if (data.message) {
+        toast[data.type || "info"](data.message);
+      }
+    });
+
+    socket.on("connect", () => {
+      console.log("✅ Socket connected for patient:", socket.id);
+    });
+
+    socket.on("disconnect", (reason) => {
+      console.log("❌ Socket disconnected:", reason);
+    });
+
+    return () => {
+      socket.disconnect();
+    };
   }, []);
 
   useEffect(() => {

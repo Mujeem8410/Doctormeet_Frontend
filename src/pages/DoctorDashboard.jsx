@@ -1,5 +1,6 @@
 import { toast } from "react-toastify";
 import React, { useEffect, useState } from "react";
+import { io } from "socket.io-client";
 import {
   FiCalendar,
   FiCheckCircle,
@@ -12,6 +13,7 @@ import {
 import API from "../utils/api";
 import DoctorNavbar from "../components/DoctorNavbar";
 import Footer from "../components/Footer";
+import { SOCKET_URL } from "../utils/runtimeConfig";
 
 const DoctorDashboard = () => {
   const [appointments, setAppointments] = useState([]);
@@ -105,6 +107,48 @@ const DoctorDashboard = () => {
 
   useEffect(() => {
     fetchAppointments();
+
+    // Setup socket for real-time appointment updates
+    const socket = io(SOCKET_URL, {
+      reconnection: true,
+      reconnectionDelay: 1000,
+      reconnectionAttempts: 5,
+      transports: ["websocket", "polling"],
+      withCredentials: true,
+    });
+
+    // Listen for new appointment requests
+    socket.on("notification", (data) => {
+      console.log("📢 Notification received:", data);
+      if (data.type === "info" && data.message?.includes("appointment")) {
+        toast.info(data.message);
+        // Refresh appointments list
+        fetchAppointments();
+      }
+    });
+
+    socket.on("appointment-update", () => {
+      console.log("📢 Appointment update received - refreshing...");
+      fetchAppointments();
+    });
+
+    socket.on("new-appointment", () => {
+      console.log("🆕 New appointment received - refreshing...");
+      fetchAppointments();
+      toast.info("You have a new appointment request!");
+    });
+
+    socket.on("connect", () => {
+      console.log("✅ Socket connected for doctor:", socket.id);
+    });
+
+    socket.on("disconnect", (reason) => {
+      console.log("❌ Socket disconnected:", reason);
+    });
+
+    return () => {
+      socket.disconnect();
+    };
   }, []);
 
   const statusBadgeClass = (status) => {

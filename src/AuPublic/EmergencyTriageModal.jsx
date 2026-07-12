@@ -20,20 +20,24 @@ const EmergencyTriageModal = () => {
     const type = "UrgentHelpNeeded";
 
     try {
-      await API.post("/emergency/alert", {
+      console.log("📢 Sending emergency alert...", { lat, lon });
+      const res = await API.post("/emergency/alert", {
         type,
         latitude: lat,
         longitude: lon,
       });
 
+      console.log("✅ Emergency alert sent:", res.data);
       toast.success("Help alert sent. Our team received your request.", {
         autoClose: 5000,
       });
     } catch (error) {
-      toast.error("Failed to send alert. Please call manually.", {
+      console.error("❌ Emergency Alert Error:", error.response?.data || error.message);
+      const errorMsg = error.response?.data?.message || "Failed to send alert. Please call manually.";
+      toast.error(errorMsg, {
         autoClose: 8000,
       });
-      console.error("Emergency Alert Error:", error);
+      console.error("Full error:", error);
     } finally {
       setIsFetching(false);
       closeModal();
